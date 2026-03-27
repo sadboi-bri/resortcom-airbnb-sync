@@ -18,157 +18,163 @@ log = logging.getLogger(__name__)
 USERNAME = os.environ["RESORTCOM_USERNAME"]
 PASSWORD = os.environ["RESORTCOM_PASSWORD"]
 OUTPUT_FILE = "calendar.ics"
+NEXT_MONTH_CLICKS = 5  # 6 views x 2 months = 12 months of data
 
-# How many times to click "Next Month" to cover ~12 months (2 months shown at a time)
-NEXT_MONTH_CLICKS = 5
+WAIT = 8000   # 8 seconds — generous wait after every page load/click
+
+
+def wait_and_screenshot(page, filename, msg=""):
+    """Wait generously, then take a screenshot for debugging."""
+    page.wait_for_timeout(WAIT)
+    page.screenshot(path=filename, full_page=True)
+    if msg:
+        log.info(msg)
+    log.info(f"Screenshot saved: {filename} | URL: {page.url}")
 
 
 def login(page):
-    log.info("Navigating to ResortCom login...")
-    page.goto("https://reservation.resortcom.com/index", wait_until="networkidle")
+    log.info("--- STEP 1: Login ---")
+    page.goto("https://reservation.resortcom.com/index", wait_until="domcontentloaded")
+    wait_and_screenshot(page, "01_login_page.png", "Login page loaded.")
+
     page.fill('input[name="username"], input[type="text"]', USERNAME)
     page.fill('input[name="password"], input[type="password"]', PASSWORD)
+    page.screenshot(path="02_credentials_filled.png")
+
     page.click('button[type="submit"], input[type="submit"]')
-    page.wait_for_load_state("networkidle", timeout=30000)
-    log.info(f"Logged in. Current URL: {page.url}")
+    wait_and_screenshot(page, "03_after_login.png", "Clicked login button.")
 
 
-def go_to_reservation_search(page):
-    log.info("Clicking Make Reservation...")
+def go_to_make_reservation(page):
+    log.info("--- STEP 2: Click Make Reservation ---")
     page.click("text=MAKE RESERVATION")
-    page.wait_for_load_state("networkidle", timeout=30000)
+    wait_and_screenshot(page, "04_make_reservation_page.png", "Make Reservation page loaded.")
 
-    log.info("Selecting Cabo San Lucas...")
-    # Clear existing selections and pick Cabo San Lucas
+
+def fill_search_form(page):
+    log.info("--- STEP 3: Fill search form ---")
+
+    # Clear any pre-selected dropdowns
     try:
-        # Close any pre-selected items first (the X buttons)
-        close_buttons = page.query_selector_all(".multiselect__tag-icon, [class*='tag'] span, .tag-close")
+        close_buttons = page.query_selector_all(".multiselect__tag-icon")
         for btn in close_buttons:
             btn.click()
-        page.wait_for_timeout(500)
+            page.wait_for_timeout(500)
     except Exception:
         pass
 
-    # Select destination: Cabo San Lucas
-    page.click("[placeholder*='destination'], [placeholder*='Destination'], .multiselect__input, input[placeholder*='Select']")
-    page.wait_for_timeout(500)
-    page.click("text=Cabo San Lucas")
-    page.wait_for_timeout(500)
+    # --- Destination: Cabo San Lucas ---
+    log.info("Selecting Cabo San Lucas...")
+    dest_inputs = page.query_selector_all(".multiselect__input")
+    if dest_inputs:
+        dest_inputs[0].click()
+        page.wait_for_timeout(2000)
+        page.screenshot(path="05a_dest_dropdown_open.png")
+        page.click("text=Cabo San Lucas")
+        page.wait_for_timeout(2000)
+        page.screenshot(path="05b_dest_selected.png")
 
+    # --- Resort: Villa Del Arco ---
     log.info("Selecting Villa Del Arco...")
-    # Select resort: Villa Del Arco - click the second dropdown
-    resort_inputs = page.query_selector_all(".multiselect__input, input[placeholder*='Select']")
+    resort_inputs = page.query_selector_all(".multiselect__input")
     if len(resort_inputs) > 1:
         resort_inputs[1].click()
-    page.wait_for_timeout(500)
-    page.click("text=Villa Del Arco")
-    page.wait_for_timeout(500)
+        page.wait_for_timeout(2000)
+        page.screenshot(path="06a_resort_dropdown_open.png")
+        page.click("text=Villa Del Arco")
+        page.wait_for_timeout(2000)
+        page.screenshot(path="06b_resort_selected.png")
 
+    # --- Room type: One Bedroom ---
     log.info("Selecting One Bedroom...")
-    # Select room type: One Bedroom
-    room_inputs = page.query_selector_all(".multiselect__input, input[placeholder*='Select']")
+    room_inputs = page.query_selector_all(".multiselect__input")
     if len(room_inputs) > 2:
         room_inputs[2].click()
-    page.wait_for_timeout(500)
-    page.click("text=One Bedroom")
-    page.wait_for_timeout(500)
+        page.wait_for_timeout(2000)
+        page.screenshot(path="07a_room_dropdown_open.png")
+        page.click("text=One Bedroom")
+        page.wait_for_timeout(2000)
+        page.screenshot(path="07b_room_selected.png")
 
-    # Set check-in date to ~3 weeks from today
+    # --- Dates: 3 weeks from now ---
     checkin = (date.today() + timedelta(weeks=3)).strftime("%-m/%-d/%Y")
     checkout = (date.today() + timedelta(weeks=5)).strftime("%-m/%-d/%Y")
+    log.info(f"Setting dates: {checkin} → {checkout}")
 
-    log.info(f"Setting dates: {checkin} to {checkout}")
-    date_inputs = page.query_selector_all("input[type='text'][class*='date'], input[placeholder*='date'], input[placeholder*='Date']")
-    if len(date_inputs) >= 2:
-        date_inputs[0].triple_click()
-        date_inputs[0].type(checkin)
-        date_inputs[1].triple_click()
-        date_inputs[1].type(checkout)
-    
-    page.wait_for_timeout(500)
-    log.info("Clicking Search...")
+    date_inputs = page.query_selector_all("input[type='text']")
+    for inp in date_inputs:
+        placeholder = (inp.get_attribute("placeholder") or "").lower()
+        if "check" in placeholder or "date" in placeholder or "from" in placeholder or "start" in placeholder:
+            inp.triple_click()
+            inp.type(checkin)
+            page.wait_for_timeout(500)
+            break
+
+    date_inputs2 = page.query_selector_all("input[type='text']")
+    for inp in date_inputs2:
+        placeholder = (inp.get_attribute("placeholder") or "").lower()
+        if "check out" in placeholder or "to" in placeholder or "end" in placeholder or "return" in placeholder:
+            inp.triple_click()
+            inp.type(checkout)
+            page.wait_for_timeout(500)
+            break
+
+    page.screenshot(path="08_form_filled.png")
+
+    # --- Click Search ---
+    log.info("Clicking SEARCH...")
     page.click("text=SEARCH")
-    page.wait_for_load_state("networkidle", timeout=30000)
+    wait_and_screenshot(page, "09_search_results.png", "Search results loaded.")
 
 
 def click_owner_time_calendar(page):
-    log.info("Looking for Owner Time calendar icon...")
-    page.wait_for_timeout(2000)
+    log.info("--- STEP 4: Click Owner Time calendar icon ---")
 
-    # Find the Owner Time section and click its calendar icon
-    # The calendar icons are next to each booking type
-    owner_section = page.query_selector("text=Owner Time")
-    if owner_section:
-        # Get the parent container and find the calendar button within it
-        parent = owner_section.evaluate_handle("el => el.closest('.row, .section, div[class*=\"time\"], div[class*=\"owner\"]') || el.parentElement.parentElement")
-        cal_btn = page.query_selector_all("button[class*='calendar'], .calendar-icon, button svg, [class*='btn-calendar']")
-        if cal_btn:
-            cal_btn[0].click()
-        else:
-            # Fallback: find all calendar-like buttons and click the first one (Owner Time)
-            all_btns = page.query_selector_all("button")
-            for btn in all_btns:
-                inner = btn.inner_html()
-                if "calendar" in inner.lower() or "📅" in inner:
-                    btn.click()
-                    break
-    
-    page.wait_for_load_state("networkidle", timeout=15000)
-    page.wait_for_timeout(2000)
-    log.info("Owner Time calendar should now be visible.")
+    # Log all buttons to find the right one
+    all_btns = page.query_selector_all("button")
+    log.info(f"Buttons on page: {len(all_btns)}")
+    for i, btn in enumerate(all_btns):
+        log.info(f"  [{i}] text='{btn.inner_text().strip()[:40]}' html='{btn.inner_html()[:60]}'")
+
+    # The Owner Time calendar icon is the FIRST calendar button on the page
+    clicked = False
+    for btn in all_btns:
+        html = btn.inner_html().lower()
+        if "calendar" in html or "fa-calendar" in html or "cal" in html:
+            log.info(f"Clicking calendar button: {btn.inner_html()[:80]}")
+            btn.click()
+            clicked = True
+            break
+
+    if not clicked:
+        # Last resort: click by position — Owner Time calendar icon is button index 0 or 1
+        if len(all_btns) > 0:
+            log.info("Fallback: clicking first button on page")
+            all_btns[0].click()
+
+    wait_and_screenshot(page, "10_owner_calendar.png", "Owner Time calendar opened.")
 
 
 def parse_calendar_dates(page):
-    """
-    Parse available dates (white boxes with teal border) from the 2-month calendar view.
-    Available dates have no hatching and have a border — we identify them by class.
-    """
+    """Extract available dates from the 2-month calendar view."""
     available = []
+    all_tds = page.query_selector_all("td")
 
-    # Get all day cells
-    # Available = not unavailable, not empty
-    # The calendar renders months with day numbers inside td or div elements
-    # We look for cells that are "available" (white/teal border) vs "unavailable" (hatched)
-    
-    # Try multiple selector strategies
-    selectors = [
-        "td.available:not(.unavailable)",
-        "td[class*='available']:not([class*='unavailable'])",
-        ".calendar-day.available",
-        "td:not(.unavailable):not(.disabled):not(.empty) > div[data-date]",
-        "[data-date]:not(.unavailable)",
-    ]
+    for td in all_tds:
+        cls = (td.get_attribute("class") or "").lower()
+        data_date = td.get_attribute("data-date") or ""
+        text = td.inner_text().strip()
 
-    cells = []
-    for sel in selectors:
-        cells = page.query_selector_all(sel)
-        if cells:
-            log.info(f"Found {len(cells)} cells with selector: {sel}")
-            break
+        # Skip unavailable/disabled/empty cells
+        skip_keywords = ["unavailable", "disabled", "empty", "other-month", "blocked", "past"]
+        if any(kw in cls for kw in skip_keywords):
+            continue
 
-    if not cells:
-        # Fallback: dump all td elements and their classes for debugging
-        all_tds = page.query_selector_all("td")
-        log.info(f"No cells found with specific selectors. Total td elements: {len(all_tds)}")
-        for td in all_tds[:20]:
-            log.info(f"  td class='{td.get_attribute('class')}' data-date='{td.get_attribute('data-date')}' text='{td.inner_text().strip()}'")
-
-    for cell in cells:
-        date_str = (
-            cell.get_attribute("data-date") or
-            cell.get_attribute("data-day") or
-            cell.get_attribute("title")
-        )
-        if not date_str:
-            # Try child elements
-            child = cell.query_selector("[data-date]")
-            if child:
-                date_str = child.get_attribute("data-date")
-
-        if date_str:
+        # Must have a date attribute or be a day number
+        if data_date:
             for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y"):
                 try:
-                    dt = datetime.strptime(date_str.strip(), fmt)
+                    dt = datetime.strptime(data_date.strip(), fmt)
                     available.append(dt.date())
                     break
                 except ValueError:
@@ -178,40 +184,42 @@ def parse_calendar_dates(page):
 
 
 def scrape_all_available_dates(page):
+    log.info("--- STEP 5: Scrape all available dates ---")
     all_available = []
 
-    # Scrape current 2-month view, then advance month by month
     for i in range(NEXT_MONTH_CLICKS + 1):
         log.info(f"Scraping calendar view {i + 1} of {NEXT_MONTH_CLICKS + 1}...")
-        page.screenshot(path=f"calendar_view_{i}.png")
-        
+        page.screenshot(path=f"11_calendar_view_{i+1}.png", full_page=True)
+
         dates = parse_calendar_dates(page)
-        log.info(f"  Found {len(dates)} available dates in this view.")
+        log.info(f"  → {len(dates)} available dates found in this view.")
         all_available.extend(dates)
 
         if i < NEXT_MONTH_CLICKS:
-            try:
-                next_btn = page.query_selector("text=Next Month, [aria-label*='next'], .next-month, button[class*='next']")
-                if next_btn:
-                    next_btn.click()
-                    page.wait_for_timeout(2000)
-                else:
-                    log.warning("Could not find Next Month button.")
-                    break
-            except PlaywrightTimeout:
-                log.warning("Timeout clicking Next Month.")
+            next_btn = (
+                page.query_selector("text=Next Month") or
+                page.query_selector("[aria-label*='next']") or
+                page.query_selector(".next-month") or
+                page.query_selector("button[class*='next']")
+            )
+            if next_btn:
+                next_btn.click()
+                page.wait_for_timeout(4000)  # Wait for calendar to update
+            else:
+                log.warning("Next Month button not found — stopping early.")
                 break
 
     unique_dates = sorted(set(all_available))
-    log.info(f"Total unique available dates found: {len(unique_dates)}")
+    log.info(f"Total unique available dates: {len(unique_dates)}")
     return unique_dates
 
 
 def dates_to_ical(available_dates):
     """
-    Airbnb iCal import treats events as BLOCKED dates.
-    So we block everything EXCEPT the available dates.
+    Airbnb reads iCal as BLOCKED dates.
+    So we block every day that is NOT in available_dates for the next 12 months.
     """
+    log.info("--- STEP 6: Generating iCal file ---")
     cal = Calendar()
     cal.add("prodid", "-//ResortCom UVCI Airbnb Sync//EN")
     cal.add("version", "2.0")
@@ -219,7 +227,6 @@ def dates_to_ical(available_dates):
     today = date.today()
     end_date = today + timedelta(days=365)
     available_set = set(available_dates)
-
     current = today
     block_start = None
 
@@ -254,12 +261,13 @@ def main():
 
         try:
             login(page)
-            go_to_reservation_search(page)
+            go_to_make_reservation(page)
+            fill_search_form(page)
             click_owner_time_calendar(page)
             available_dates = scrape_all_available_dates(page)
 
             if not available_dates:
-                log.warning("No available dates found — check screenshots in artifacts.")
+                log.warning("⚠️  No available dates found — check screenshots in artifacts.")
             else:
                 ical_data = dates_to_ical(available_dates)
                 with open(OUTPUT_FILE, "wb") as f:
@@ -268,9 +276,10 @@ def main():
 
             with open("available_dates.json", "w") as f:
                 json.dump([str(d) for d in available_dates], f, indent=2)
+            log.info("✅ available_dates.json written.")
 
         except Exception as e:
-            page.screenshot(path="error_state.png")
+            page.screenshot(path="error_state.png", full_page=True)
             log.error(f"Script failed: {e}")
             raise
         finally:
