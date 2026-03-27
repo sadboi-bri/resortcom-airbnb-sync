@@ -7,10 +7,10 @@ on:
 
 jobs:
   sync-calendar:
-    runs-on: ubuntu-22.04   # Use Ubuntu 22 to avoid libasound2 issue
+    runs-on: ubuntu-22.04
 
     permissions:
-      contents: write       # Needed to commit the calendar.ics file
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -32,6 +32,17 @@ jobs:
           RESORTCOM_USERNAME: ${{ secrets.RESORTCOM_USERNAME }}
           RESORTCOM_PASSWORD: ${{ secrets.RESORTCOM_PASSWORD }}
         run: python scraper.py
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: |
+            *.png
+            page_debug.html
+            available_dates.json
+          retention-days: 3
 
       - name: Commit and push updated calendar
         run: |
