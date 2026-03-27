@@ -105,7 +105,7 @@ def fill_search_form(page):
     for inp in date_inputs:
         placeholder = (inp.get_attribute("placeholder") or "").lower()
         if "check" in placeholder or "date" in placeholder or "from" in placeholder or "start" in placeholder:
-            inp.triple_click()
+            inp.click(click_count=3)
             inp.type(checkin)
             page.wait_for_timeout(500)
             break
@@ -114,7 +114,7 @@ def fill_search_form(page):
     for inp in date_inputs2:
         placeholder = (inp.get_attribute("placeholder") or "").lower()
         if "check out" in placeholder or "to" in placeholder or "end" in placeholder or "return" in placeholder:
-            inp.triple_click()
+            inp.click(click_count=3)
             inp.type(checkout)
             page.wait_for_timeout(500)
             break
