@@ -176,29 +176,29 @@ def fill_search_form(page):
 
 def click_owner_time_calendar(page):
     log.info("--- STEP 4: Click Owner Time calendar icon ---")
+
+    # Scroll down so the results are fully loaded
+    page.evaluate("window.scrollTo(0, 600)")
+    page.wait_for_timeout(3000)
     snap(page, "10_before_owner.png")
 
-    # Log all buttons
-    all_btns = page.query_selector_all("button")
-    log.info(f"Buttons on page: {len(all_btns)}")
-    for i, btn in enumerate(all_btns):
-        log.info(f"  [{i}] text='{btn.inner_text().strip()[:40]}' class='{(btn.get_attribute('class') or '')[:60]}'")
+    # From the logs: button text is "Check Availablity" class "btn"
+    # Use JS to scroll into view and click — bypasses visibility issues
+    clicked = page.evaluate("""() => {
+        const allBtns = Array.from(document.querySelectorAll('button'));
+        const btn = allBtns.find(b =>
+            b.innerText.includes('Check Availab') ||
+            b.className.includes('calendar')
+        );
+        if (btn) {
+            btn.scrollIntoView();
+            btn.click();
+            return btn.innerText.trim();
+        }
+        return null;
+    }""")
 
-    # Find calendar button near "Owner Time" text
-    clicked = False
-    for btn in all_btns:
-        html = btn.inner_html().lower()
-        cls = (btn.get_attribute("class") or "").lower()
-        if "calendar" in html or "calendar" in cls or "fa-calendar" in html:
-            log.info(f"Clicking calendar button: {btn.inner_html()[:80]}")
-            btn.click()
-            clicked = True
-            break
-
-    if not clicked and len(all_btns) > 0:
-        log.warning("No calendar button found by class, clicking first button")
-        all_btns[0].click()
-
+    log.info(f"Clicked button via JS: '{clicked}'")
     page.wait_for_timeout(8000)
     snap(page, "11_owner_calendar.png", "Owner Time calendar opened")
 
