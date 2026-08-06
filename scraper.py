@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 USERNAME = os.environ["RESORTCOM_USERNAME"]
 PASSWORD = os.environ["RESORTCOM_PASSWORD"]
 OUTPUT_FILE = "calendar.ics"
-NEXT_MONTH_CLICKS = 10  # Click next enough times to cover 12 months
+NEXT_MONTH_CLICKS = 16  # Click next enough times to cover 12 months
 
 
 def snap(page, filename, msg=""):
